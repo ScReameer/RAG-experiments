@@ -32,10 +32,10 @@ dev = [
 
 [tool.pdm.scripts]
 serve = {shell = "HAYHOOKS_HOST=${HAYHOOKS_HOST:-0.0.0.0} HAYHOOKS_PORT=${HAYHOOKS_PORT:-1416} HAYHOOKS_PIPELINES_DIR=${HAYHOOKS_PIPELINES_DIR:-haystack/pipelines} HAYHOOKS_ADDITIONAL_PYTHON_PATH=${HAYHOOKS_ADDITIONAL_PYTHON_PATH:-haystack} hayhooks run"}
-haystack.infra = {shell = "docker compose --env-file .env.haystack -f docker-compose.haystack.yml up -d --wait haystack-pgvector"}
-haystack.up = {shell = "docker compose --env-file .env.haystack -f docker-compose.haystack.yml up -d --build --wait"}
-lightrag.up = {shell = "docker compose --env-file .env.lightrag -f docker-compose.lightrag.yml up -d --wait"}
-ragflow.up = {shell = "docker compose --env-file .env.ragflow -f docker-compose.ragflow.yml up -d --wait"}
+"haystack.infra" = {shell = "docker compose --env-file .env.haystack -f docker-compose.haystack.yml up -d --wait haystack-pgvector"}
+"haystack.up" = {shell = "docker compose --env-file .env.haystack -f docker-compose.haystack.yml up -d --build --wait"}
+"lightrag.up" = {shell = "docker compose --env-file .env.lightrag -f docker-compose.lightrag.yml up -d --wait"}
+"ragflow.up" = {shell = "docker compose --env-file .env.ragflow -f docker-compose.ragflow.yml up -d --wait"}
 dev.composite = ["haystack.infra", "serve"]
 check.composite = ["ruff check", "ruff format --check", "mypy haystack", "pdm lock --check"]
 
