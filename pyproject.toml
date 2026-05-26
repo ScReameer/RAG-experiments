@@ -1,0 +1,65 @@
+[project]
+name = "RESTful-advanced-RAG"
+version = "0.1.0"
+description = "Context-first RAG service built on Haystack, Hayhooks, and pgvector"
+authors = [
+    {name = "vadim", email = "vingvadim@gmail.com"},
+]
+dependencies = [
+    "fastapi>=0.127.0",
+    "hayhooks>=1.19.2,<2.0.0",
+    "haystack-ai>=2.29.0,<3.0.0",
+    "mdit-plain>=1.0.1,<2.0.0",
+    "pgvector-haystack>=6.3.0,<7.0.0",
+    "psycopg[binary]>=3.3.0,<4.0.0",
+    "pypdf>=6.0.0,<7.0.0",
+    "python-dotenv>=1.2.1,<2.0.0",
+    "python-multipart>=0.0.20",
+]
+requires-python = ">=3.14,<3.15"
+readme = "README.md"
+license = {text = "MIT"}
+
+
+[tool.pdm]
+distribution = false
+
+[dependency-groups]
+dev = [
+    "mypy>=1.19.1",
+    "ruff>=0.14.10",
+]
+
+[tool.pdm.scripts]
+serve = {shell = "HAYHOOKS_HOST=${HAYHOOKS_HOST:-0.0.0.0} HAYHOOKS_PORT=${HAYHOOKS_PORT:-1416} HAYHOOKS_PIPELINES_DIR=${HAYHOOKS_PIPELINES_DIR:-haystack/pipelines} HAYHOOKS_ADDITIONAL_PYTHON_PATH=${HAYHOOKS_ADDITIONAL_PYTHON_PATH:-haystack} hayhooks run"}
+haystack.infra = {shell = "docker compose --env-file .env.haystack -f docker-compose.haystack.yml up -d --wait haystack-pgvector"}
+haystack.up = {shell = "docker compose --env-file .env.haystack -f docker-compose.haystack.yml up -d --build --wait"}
+lightrag.up = {shell = "docker compose --env-file .env.lightrag -f docker-compose.lightrag.yml up -d --wait"}
+ragflow.up = {shell = "docker compose --env-file .env.ragflow -f docker-compose.ragflow.yml up -d --wait"}
+dev.composite = ["haystack.infra", "serve"]
+check.composite = ["ruff check", "ruff format --check", "mypy haystack", "pdm lock --check"]
+
+[tool.ruff]
+line-length = 100
+indent-width = 4
+lint.extend-select = ["I"]
+
+[tool.mypy]
+python_version = "3.14"
+plugins = []
+mypy_path = ["haystack"]
+strict = true
+disallow_subclassing_any = false
+warn_unused_ignores = true
+warn_return_any = true
+disallow_any_generics = true
+no_implicit_optional = true
+show_error_codes = true
+
+[[tool.mypy.overrides]]
+module = [
+    "hayhooks.*",
+    "haystack.*",
+    "haystack_integrations.*",
+]
+ignore_missing_imports = true

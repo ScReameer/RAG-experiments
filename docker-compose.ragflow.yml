@@ -1,0 +1,215 @@
+services:
+  ragflow-infinity:
+    image: infiniflow/infinity:${RAGFLOW_INFINITY_VERSION:-v0.7.0}
+    container_name: ragflow-infinity
+    restart: unless-stopped
+    command: ["-f", "/infinity_conf.toml"]
+    mem_limit: ${RAGFLOW_MEM_LIMIT:-8073741824}
+    ulimits:
+      nofile:
+        soft: 500000
+        hard: 500000
+    volumes:
+      - ragflow_infinity_data:/var/infinity
+    configs:
+      - source: ragflow_infinity_config
+        target: /infinity_conf.toml
+    healthcheck:
+      test: ["CMD", "curl", "http://localhost:23820/admin/node/current"]
+      interval: 10s
+      timeout: 10s
+      retries: 120
+    networks:
+      - ragflow_network
+
+  ragflow-mysql:
+    image: mysql:8.0.39
+    container_name: ragflow-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${RAGFLOW_MYSQL_PASSWORD:-infini_rag_flow}
+      MYSQL_ROOT_HOST: "%"
+      MYSQL_DATABASE: rag_flow
+    command:
+      - --max_connections=1000
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --default-authentication-plugin=mysql_native_password
+      - --tls_version=TLSv1.2,TLSv1.3
+      - --binlog_expire_logs_seconds=604800
+    volumes:
+      - ragflow_mysql_data:/var/lib/mysql
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "mysqladmin",
+          "ping",
+          "-uroot",
+          "-p${RAGFLOW_MYSQL_PASSWORD:-infini_rag_flow}",
+        ]
+      interval: 10s
+      timeout: 10s
+      retries: 120
+    networks:
+      - ragflow_network
+
+  ragflow-minio:
+    image: pgsty/minio:RELEASE.2026-03-25T00-00-00Z
+    container_name: ragflow-minio
+    restart: unless-stopped
+    command: ["server", "--console-address", ":9001", "/data"]
+    environment:
+      MINIO_ROOT_USER: ${RAGFLOW_MINIO_USER:-rag_flow}
+      MINIO_ROOT_PASSWORD: ${RAGFLOW_MINIO_PASSWORD:-infini_rag_flow}
+    volumes:
+      - ragflow_minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 10s
+      retries: 120
+    networks:
+      - ragflow_network
+
+  ragflow-redis:
+    image: valkey/valkey:8
+    container_name: ragflow-redis
+    restart: unless-stopped
+    command:
+      [
+        "redis-server",
+        "--requirepass",
+        "${RAGFLOW_REDIS_PASSWORD:-infini_rag_flow}",
+        "--maxmemory",
+        "128mb",
+        "--maxmemory-policy",
+        "allkeys-lru",
+      ]
+    volumes:
+      - ragflow_redis_data:/data
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "redis-cli",
+          "-a",
+          "${RAGFLOW_REDIS_PASSWORD:-infini_rag_flow}",
+          "ping",
+        ]
+      interval: 10s
+      timeout: 10s
+      retries: 120
+    networks:
+      - ragflow_network
+
+  ragflow:
+    image: ${RAGFLOW_IMAGE:-infiniflow/ragflow:v0.25.5}
+    container_name: ragflow
+    restart: unless-stopped
+    command:
+      - --enable-adminserver
+    environment:
+      DOC_ENGINE: infinity
+      DEVICE: cpu
+      API_PROXY_SCHEME: python
+      INFINITY_HOST: ragflow-infinity
+      INFINITY_THRIFT_PORT: 23817
+      INFINITY_HTTP_PORT: 23820
+      INFINITY_PSQL_PORT: 5432
+      MYSQL_HOST: ragflow-mysql
+      MYSQL_PORT: 3306
+      MYSQL_USER: root
+      MYSQL_PASSWORD: ${RAGFLOW_MYSQL_PASSWORD:-infini_rag_flow}
+      MYSQL_DBNAME: rag_flow
+      MYSQL_MAX_PACKET: 1073741824
+      MINIO_HOST: ragflow-minio
+      MINIO_USER: ${RAGFLOW_MINIO_USER:-rag_flow}
+      MINIO_PASSWORD: ${RAGFLOW_MINIO_PASSWORD:-infini_rag_flow}
+      REDIS_HOST: ragflow-redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${RAGFLOW_REDIS_PASSWORD:-infini_rag_flow}
+      REGISTER_ENABLED: ${RAGFLOW_REGISTER_ENABLED:-1}
+      DOC_BULK_SIZE: ${RAGFLOW_DOC_BULK_SIZE:-4}
+      EMBEDDING_BATCH_SIZE: ${RAGFLOW_EMBEDDING_BATCH_SIZE:-16}
+      TZ: ${RAGFLOW_TZ:-Europe/Moscow}
+    ports:
+      - "${RAGFLOW_BIND_HOST:-127.0.0.1}:${RAGFLOW_WEB_PORT:-8088}:80"
+      - "${RAGFLOW_BIND_HOST:-127.0.0.1}:${RAGFLOW_API_PORT:-9380}:9380"
+      - "${RAGFLOW_BIND_HOST:-127.0.0.1}:${RAGFLOW_ADMIN_PORT:-9381}:9381"
+    volumes:
+      - ragflow_logs:/ragflow/logs
+    depends_on:
+      ragflow-infinity:
+        condition: service_healthy
+      ragflow-mysql:
+        condition: service_healthy
+      ragflow-minio:
+        condition: service_healthy
+      ragflow-redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:9380/api/v1/system/healthz >/dev/null"]
+      interval: 10s
+      timeout: 10s
+      retries: 120
+      start_period: 60s
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - ragflow_network
+
+volumes:
+  ragflow_infinity_data:
+  ragflow_mysql_data:
+  ragflow_minio_data:
+  ragflow_redis_data:
+  ragflow_logs:
+
+configs:
+  ragflow_infinity_config:
+    content: |
+      [general]
+      version = "0.7.0"
+      time_zone = "utc-8"
+
+      [network]
+      server_address = "0.0.0.0"
+      postgres_port = 5432
+      http_port = 23820
+      client_port = 23817
+      connection_pool_size = 128
+
+      [log]
+      log_filename = "infinity.log"
+      log_dir = "/var/infinity/log"
+      log_to_stdout = true
+      log_file_max_size = "100MB"
+      log_file_rotate_count = 10
+      log_level = "info"
+
+      [storage]
+      persistence_dir = "/var/infinity/persistence"
+      data_dir = "/var/infinity/data"
+      optimize_interval = "10s"
+      cleanup_interval = "60s"
+      compact_interval = "120s"
+      storage_type = "local"
+      mem_index_capacity = 65536
+
+      [buffer]
+      buffer_manager_size = "2GB"
+      lru_num = 7
+      temp_dir = "/var/infinity/tmp"
+      result_cache = "off"
+      memindex_memory_quota = "1GB"
+
+      [wal]
+      wal_dir = "/var/infinity/wal"
+
+      [resource]
+
+networks:
+  ragflow_network:
+    name: ragflow_network
+    driver: bridge

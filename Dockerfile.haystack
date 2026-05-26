@@ -1,0 +1,24 @@
+FROM python:3.14-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PDM_CHECK_UPDATE=false
+
+WORKDIR /app
+
+RUN pip install --no-cache-dir "pdm==2.26.9" "uv>=0.9.0,<1.0.0"
+
+COPY pyproject.toml pdm.lock README.md /app/
+RUN pdm config use_uv true && pdm lock --check && pdm sync --prod --no-editable --no-self
+
+COPY haystack /app/haystack
+
+ENV HAYHOOKS_HOST=0.0.0.0 \
+    HAYHOOKS_PORT=1416 \
+    HAYHOOKS_PIPELINES_DIR=/app/haystack/pipelines \
+    HAYHOOKS_ADDITIONAL_PYTHON_PATH=/app/haystack
+
+EXPOSE 1416
+
+CMD ["pdm", "run", "hayhooks", "run"]

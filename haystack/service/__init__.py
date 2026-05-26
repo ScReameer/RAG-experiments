@@ -1,0 +1,1 @@
+"""Shared Haystack service helpers."""

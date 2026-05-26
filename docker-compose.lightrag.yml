@@ -1,0 +1,86 @@
+services:
+  pgvector:
+    hostname: db
+    image: pgvector/pgvector:0.8.1-pg18-trixie
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-sa}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sa}
+      POSTGRES_DB: ${POSTGRES_DATABASE:-sa}
+    ports:
+      - "${POSTGRES_BIND_HOST:-127.0.0.1}:${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - lightrag_pgvector18_data:/var/lib/postgresql/
+    configs:
+      - source: lightrag_pgvector_extensions
+        target: /docker-entrypoint-initdb.d/001-extensions.sql
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-sa} -d ${POSTGRES_DATABASE:-sa}",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+    networks:
+      - lightrag_network
+
+  lightrag:
+    image: ghcr.io/hkuds/lightrag:${LIGHTRAG_IMAGE_TAG:-latest}
+    restart: unless-stopped
+    env_file:
+      - .env.lightrag
+    environment:
+      HOST: 0.0.0.0
+      PORT: 9621
+      WORKSPACE: ${LIGHTRAG_DEFAULT_WORKSPACE:-default}
+      POSTGRES_HOST: pgvector
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER:-sa}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sa}
+      POSTGRES_DATABASE: ${POSTGRES_DATABASE:-sa}
+      POSTGRES_WORKSPACE: ${LIGHTRAG_DEFAULT_WORKSPACE:-default}
+      WORKING_DIR: /app/data/rag_storage
+      INPUT_DIR: /app/data/inputs
+      PROMPT_DIR: /app/data/prompts
+    ports:
+      - "${LIGHTRAG_BIND_HOST:-127.0.0.1}:${LIGHTRAG_HOST_PORT:-9621}:9621"
+    volumes:
+      - lightrag_storage:/app/data/rag_storage
+      - lightrag_inputs:/app/data/inputs
+      - lightrag_prompts:/app/data/prompts
+      - ./.env.lightrag:/app/.env:ro
+    depends_on:
+      pgvector:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:9621/health', timeout=5).read()\"",
+        ]
+      interval: 10s
+      timeout: 10s
+      retries: 60
+      start_period: 30s
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - lightrag_network
+
+volumes:
+  lightrag_pgvector18_data:
+  lightrag_storage:
+  lightrag_inputs:
+  lightrag_prompts:
+
+configs:
+  lightrag_pgvector_extensions:
+    content: |
+      CREATE EXTENSION IF NOT EXISTS vector;
+
+networks:
+  lightrag_network:
+    name: lightrag_network
+    driver: bridge

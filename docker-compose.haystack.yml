@@ -1,0 +1,76 @@
+services:
+  haystack-pgvector:
+    hostname: db
+    image: pgvector/pgvector:0.8.1-pg18-trixie
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${HAYSTACK_POSTGRES_USER:-sa}
+      POSTGRES_PASSWORD: ${HAYSTACK_POSTGRES_PASSWORD:-sa}
+      POSTGRES_DB: ${HAYSTACK_POSTGRES_DATABASE:-sa}
+    ports:
+      - "${HAYSTACK_POSTGRES_BIND_HOST:-127.0.0.1}:${HAYSTACK_POSTGRES_PORT:-5433}:5432"
+    volumes:
+      - haystack_pgvector18_data:/var/lib/postgresql/
+    configs:
+      - source: haystack_pgvector_extensions
+        target: /docker-entrypoint-initdb.d/001-extensions.sql
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${HAYSTACK_POSTGRES_USER:-sa} -d ${HAYSTACK_POSTGRES_DATABASE:-sa}",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+    networks:
+      - haystack_network
+
+  hayhooks:
+    build:
+      context: .
+      dockerfile: Dockerfile.haystack
+    image: restful-advanced-rag-hayhooks:local
+    restart: unless-stopped
+    env_file:
+      - .env.haystack
+    environment:
+      HAYHOOKS_HOST: 0.0.0.0
+      HAYHOOKS_PORT: 1416
+      HAYHOOKS_PIPELINES_DIR: /app/haystack/pipelines
+      HAYHOOKS_ADDITIONAL_PYTHON_PATH: /app/haystack
+      HAYHOOKS_LOG_LEVEL: ${HAYHOOKS_LOG_LEVEL:-INFO}
+      HAYSTACK_POSTGRES_HOST: haystack-pgvector
+      HAYSTACK_POSTGRES_PORT: "5432"
+    ports:
+      - "${HAYHOOKS_BIND_HOST:-127.0.0.1}:${HAYHOOKS_PORT:-1416}:1416"
+    depends_on:
+      haystack-pgvector:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:1416/status', timeout=5).read()\"",
+        ]
+      interval: 10s
+      timeout: 10s
+      retries: 60
+      start_period: 30s
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - haystack_network
+
+volumes:
+  haystack_pgvector18_data:
+
+configs:
+  haystack_pgvector_extensions:
+    content: |
+      CREATE EXTENSION IF NOT EXISTS vector;
+
+networks:
+  haystack_network:
+    name: haystack_network
+    driver: bridge
