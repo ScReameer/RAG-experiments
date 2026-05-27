@@ -26,115 +26,65 @@ The Docker image installs through PDM from `pyproject.toml` and `pdm.lock`; ther
 
 ## Haystack API
 
-Base URL:
+Base URL: `http://localhost:1416`.
 
-```text
-http://localhost:1416
-```
-
-Hayhooks wraps every pipeline response into a top-level `result` object:
+Hayhooks wraps each response into `result`:
 
 ```json
 {
-  "result": {
-    "status": "retrieved"
-  }
+  "result": {}
 }
 ```
 
-The service never generates a final LLM answer. It only indexes documents, manages indexed chunks,
-and returns retrieved context chunks.
+The service never generates a final LLM answer. It indexes documents, manages chunks, and returns
+retrieved context.
 
 Common rules:
 
-- `shop_id` is required on every endpoint. Each shop gets an independent pgvector table and HNSW
-  index.
-- `shop_id` and `document_id` must start with a letter or digit and may contain letters, digits,
-  `_`, `-`, `.`, `:`.
-- `document_id` scopes operations to one logical source document. A document can produce many
-  chunks.
-- `filters` use Haystack metadata filter syntax and are applied inside the current shop table.
-  Example: `{"field":"meta.category","operator":"==","value":"delivery"}`.
-- `table_exists: false` means the shop table does not exist yet. Read-only endpoints return empty
-  results in this case and do not create an empty table.
-
-Chunk payload shape:
+- `shop_id` is required everywhere. Each shop maps to its own pgvector table and HNSW index.
+- `document_id` identifies one logical source document; one source document can produce many chunks.
+- `shop_id` and `document_id` may contain letters, digits, `_`, `-`, `.`, `:` and must start
+  with a letter or digit.
+- `filters` use Haystack metadata filter syntax, for example
+  `{"field":"meta.category","operator":"==","value":"delivery"}`.
+- `table_exists: false` means read-only endpoints found no table and returned an empty result
+  without creating one.
+- Chunk payloads are always shaped as:
 
 ```json
 {
-  "id": "haystack-document-id",
+  "id": "chunk-id",
   "content": "chunk text",
   "score": 0.83,
-  "metadata": {
-    "shop_id": "shop_a",
-    "document_id": "delivery_policy",
-    "source_name": "delivery_policy",
-    "ingestion_type": "text"
-  }
+  "metadata": {}
 }
 ```
 
 ### `POST /indexing/run`
 
-Indexes text or files for one shop.
-
-Content type: `multipart/form-data`.
-
-Pipeline internals:
-
-```text
-file conversion -> DocumentCleaner -> DocumentSplitter -> external embedding API -> pgvector writer
-```
-
-Supported file MIME types:
-
-```text
-text/plain
-text/markdown
-application/pdf
-```
+Indexes text or files. Content type: `multipart/form-data`.
 
 Request fields:
 
 | Field | Type | Required | Default | Description |
 |---|---:|---:|---:|---|
-| `shop_id` | string | yes | - | Shop knowledge base id. Determines the pgvector table. |
-| `document_id` | string/null | no | generated | Logical document id. Can be provided only when indexing one text input or one file. |
-| `text` | string/null | no | `null` | Raw text to index. Either `text` or at least one `files` item is required. |
-| `files` | file[]/null | no | `null` | One or more uploaded files. |
+| `shop_id` | string | yes | - | Shop knowledge base id. |
+| `document_id` | string/null | no | generated | Logical document id. Allowed only for one text input or one file. |
+| `text` | string/null | no | `null` | Raw text. Either `text` or `files` is required. |
+| `files` | file[]/null | no | `null` | Supported MIME types: `text/plain`, `text/markdown`, `application/pdf`. |
 | `metadata` | object/null | no | `null` | Extra metadata merged into every source document. Reserved keys are overwritten by the service. |
-| `replace_existing` | boolean | no | `true` | Before writing new chunks, delete old chunks with the same `document_id`. |
+| `replace_existing` | boolean | no | `true` | Delete old chunks with the same `document_id` before writing the new version. |
 
-Reserved metadata keys written by the service:
+Reserved metadata keys: `shop_id`, `document_id`, `source_name`, `ingestion_type`, `mime_type`,
+`file_name`.
 
-```text
-shop_id
-document_id
-source_name
-ingestion_type
-mime_type
-file_name
-```
+For curl multipart requests, prefer omitting `metadata`; structured clients can send it.
 
-`metadata` is part of the OpenAPI schema, but plain curl cannot reliably send a nested dict through
-Hayhooks multipart parsing. For curl-based indexing, prefer explicit `document_id` and keep metadata
-out of the request unless the client can send structured multipart objects.
+Pipeline: file conversion -> cleaner -> splitter -> external embedding API -> pgvector writer.
 
-Response `result` fields:
-
-| Field | Description |
-|---|---|
-| `status` | Always `indexed` on success. |
-| `shop_id` | Normalized shop id. |
-| `document_ids` | Logical document ids touched by this request. |
-| `documents_received` | Number of source documents before splitting. |
-| `chunks_deleted` | Old chunks removed because `replace_existing=true`. |
-| `chunks_written` | New chunks written after splitting and embedding. |
-| `table_name` | Physical pgvector table name. |
-| `table_exists` | `true` after successful indexing. |
-| `embedding_model` | Embedding model used. |
-| `embedding_dimension` | Stored vector dimension. |
-| `vector_type` | pgvector storage type, for example `halfvec`. |
+Response contains: `status`, `shop_id`, `document_ids`, `documents_received`, `chunks_deleted`,
+`chunks_written`, `table_name`, `table_exists`, `embedding_model`, `embedding_dimension`,
+`vector_type`.
 
 Index raw text:
 
@@ -146,7 +96,7 @@ curl -sS -X POST http://localhost:1416/indexing/run \
   -F 'text=We deliver to Russia by courier.'
 ```
 
-Index a Markdown file:
+Index a file:
 
 ```bash
 curl -sS -X POST http://localhost:1416/indexing/run \
@@ -156,20 +106,11 @@ curl -sS -X POST http://localhost:1416/indexing/run \
   -F 'files=@Bloom_info.md;type=text/markdown'
 ```
 
-Index several files at once. In this mode omit `document_id`; ids are generated from filenames:
-
-```bash
-curl -sS -X POST http://localhost:1416/indexing/run \
-  -F 'shop_id=shop_a' \
-  -F 'files=@delivery.md;type=text/markdown' \
-  -F 'files=@returns.pdf;type=application/pdf'
-```
+For multiple files, omit `document_id`; ids are generated from filenames.
 
 ### `POST /retrieve/run`
 
-Returns relevant context chunks for a query. It does not generate an answer.
-
-Content type: `application/json`.
+Returns context chunks for a query. Content type: `application/json`.
 
 Request fields:
 
@@ -180,47 +121,21 @@ Request fields:
 | `top_k` | integer/null | no | `HAYSTACK_DEFAULT_TOP_K` | Maximum number of chunks to return. |
 | `document_id` | string/null | no | `null` | Restrict retrieval to one logical document. |
 | `filters` | object/null | no | `null` | Additional Haystack metadata filters. |
-| `mode` | `vector`/`keyword` | no | `vector` | Retrieval strategy. |
+| `mode` | `vector`/`keyword`/`hybrid` | no | `vector` | Retrieval strategy. |
+| `context_strategy` | `chunks`/`window` | no | `chunks` | `chunks` returns matched chunks; `window` also returns neighboring chunks. |
+| `context_window_size` | integer/null | no | `HAYSTACK_CONTEXT_WINDOW_SIZE` | Neighbor count on each side for `context_strategy=window`. |
 
 Modes:
 
-| Mode | Behavior |
-|---|---|
-| `vector` | Embeds `query` with the configured external embedding API and searches pgvector. Best default for multilingual semantic search. |
-| `keyword` | Uses PostgreSQL full-text search over chunk content. `HAYSTACK_PGVECTOR_LANGUAGE` controls the FTS config; default is `simple`. |
+- `vector`: semantic pgvector search using the configured external embedding API.
+- `keyword`: PostgreSQL full-text search. `HAYSTACK_PGVECTOR_LANGUAGE` controls only this mode.
+- `hybrid`: vector + keyword, fused with Haystack RRF (`DocumentJoiner`).
 
-If the shop table does not exist, the endpoint returns `chunks: []` and `table_exists: false`.
-For `mode=vector`, this also avoids an embedding API call.
+Response contains: `status`, `shop_id`, `mode`, `context_strategy`, `context_window_size`,
+`query`, `top_k`, `filters`, `table_name`, `table_exists`, `chunks`, `contexts`,
+`context_chunks`, `embedding_model`.
 
-Response `result` fields:
-
-| Field | Description |
-|---|---|
-| `status` | Always `retrieved` on success. |
-| `shop_id` | Normalized shop id. |
-| `mode` | Used retrieval mode. |
-| `query` | Original query. |
-| `top_k` | Effective top-k value. |
-| `filters` | Effective filter expression. |
-| `table_name` | Physical pgvector table name. |
-| `table_exists` | Whether the shop table exists. |
-| `chunks` | Retrieved chunk payloads. |
-| `embedding_model` | Configured embedding model. |
-
-Vector retrieval:
-
-```bash
-curl -sS -X POST http://localhost:1416/retrieve/run \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "shop_id": "shop_a",
-    "query": "Есть доставка в Россию?",
-    "top_k": 5,
-    "mode": "vector"
-  }'
-```
-
-Retrieve only from one document:
+Vector retrieval scoped to one document:
 
 ```bash
 curl -sS -X POST http://localhost:1416/retrieve/run \
@@ -229,24 +144,27 @@ curl -sS -X POST http://localhost:1416/retrieve/run \
     "shop_id": "shop_a",
     "document_id": "delivery_policy",
     "query": "Какие есть варианты доставки?",
-    "top_k": 3
+    "top_k": 3,
+    "mode": "vector"
   }'
 ```
 
-Keyword retrieval:
+Hybrid retrieval with expanded context:
 
 ```bash
 curl -sS -X POST http://localhost:1416/retrieve/run \
   -H 'Content-Type: application/json' \
   -d '{
     "shop_id": "shop_a",
-    "query": "courier Russia",
-    "top_k": 5,
-    "mode": "keyword"
+    "query": "Какие есть варианты доставки?",
+    "top_k": 3,
+    "mode": "hybrid",
+    "context_strategy": "window",
+    "context_window_size": 1
   }'
 ```
 
-Retrieval with an extra metadata filter:
+Metadata filter example:
 
 ```bash
 curl -sS -X POST http://localhost:1416/retrieve/run \
@@ -264,9 +182,7 @@ curl -sS -X POST http://localhost:1416/retrieve/run \
 
 ### `POST /documents/run`
 
-Counts, lists, or deletes indexed chunks/documents for one shop.
-
-Content type: `application/json`.
+Counts, lists, or deletes indexed chunks/documents. Content type: `application/json`.
 
 Request fields:
 
@@ -281,26 +197,13 @@ Request fields:
 
 Actions:
 
-| Action | Behavior |
-|---|---|
-| `count` | Returns chunk count. Does not create an empty table for unknown shops. |
-| `list` | Returns document summaries and optionally raw chunks. |
-| `delete` | Deletes matching chunks. If no chunks remain, drops the shop table. |
+- `count`: returns chunk count and does not create empty tables.
+- `list`: returns grouped document summaries and optionally raw chunks.
+- `delete`: deletes matching chunks; drops the shop table when it becomes empty.
 
-Response `result` fields depend on action:
-
-| Field | Actions | Description |
-|---|---|---|
-| `status` | all | `counted`, `listed`, or `deleted`. |
-| `shop_id` | all | Normalized shop id. |
-| `document_id` | all | Requested document id, if any. |
-| `filters` | all | Effective filter expression. |
-| `table_name` | all | Physical pgvector table name. |
-| `table_exists` | all | Whether the shop table exists after the operation. |
-| `chunks_count` | `count`, `list` | Number of matching chunks. |
-| `chunks_deleted` | `delete` | Number of deleted chunks. |
-| `documents` | `list` | Grouped document summaries: `document_id`, `shop_id`, `source_name`, `file_name`, `chunks_count`. |
-| `chunks` | `list` | Raw chunk payloads when `include_chunks=true`; otherwise empty. |
+Response fields depend on action. Common fields: `status`, `shop_id`, `document_id`, `filters`,
+`table_name`, `table_exists`. `count`/`list` add `chunks_count`; `delete` adds
+`chunks_deleted`; `list` can also return `documents` and `chunks`.
 
 Count chunks in a shop:
 
@@ -313,33 +216,20 @@ curl -sS -X POST http://localhost:1416/documents/run \
   }'
 ```
 
-List document summaries:
+List document summaries with chunks:
 
 ```bash
 curl -sS -X POST http://localhost:1416/documents/run \
   -H 'Content-Type: application/json' \
   -d '{
     "shop_id": "shop_a",
-    "action": "list",
-    "limit": 20
-  }'
-```
-
-List chunks for one document:
-
-```bash
-curl -sS -X POST http://localhost:1416/documents/run \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "shop_id": "shop_a",
-    "document_id": "delivery_policy",
     "action": "list",
     "include_chunks": true,
     "limit": 5
   }'
 ```
 
-Delete one document:
+Delete one document or the whole shop:
 
 ```bash
 curl -sS -X POST http://localhost:1416/documents/run \
@@ -351,16 +241,7 @@ curl -sS -X POST http://localhost:1416/documents/run \
   }'
 ```
 
-Delete the whole shop knowledge base:
-
-```bash
-curl -sS -X POST http://localhost:1416/documents/run \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "shop_id": "shop_a",
-    "action": "delete"
-  }'
-```
+Omit `document_id` in the same request to delete the whole shop knowledge base.
 
 For local development with only pgvector in Docker and Hayhooks in the PDM environment:
 
@@ -373,12 +254,10 @@ pdm dev
 loaded from `.env.haystack` by the pipeline wrappers, so direct debugging through the PDM
 environment uses the same config shape as the container.
 
-## Haystack Data Model
+## Haystack Notes
 
-Each shop gets its own pgvector table and therefore its own HNSW index. The external `shop_id`
-is converted to a safe deterministic table name using `HAYSTACK_PGVECTOR_TABLE_PREFIX`, a short
-slug, and a hash. Chunks still keep `shop_id` and `document_id` in metadata for audit/debugging,
-but vector retrieval does not rely on filtering a shared HNSW graph by `meta.shop_id`.
+Each shop gets its own pgvector table and HNSW index. Chunks still keep `shop_id` and
+`document_id` in metadata, but vector search does not filter one shared HNSW graph by `shop_id`.
 
 Default local settings use:
 
@@ -389,19 +268,13 @@ keyword FTS config:  simple
 vector type:          halfvec
 embedding model:      text-embedding-3-large
 embedding dimension:  3072
+context window size:  1
 ```
 
-PostgreSQL connection strings are assembled from `HAYSTACK_POSTGRES_HOST`,
-`HAYSTACK_POSTGRES_PORT`, `HAYSTACK_POSTGRES_USER`, `HAYSTACK_POSTGRES_PASSWORD`, and
-`HAYSTACK_POSTGRES_DATABASE`. `PG_CONN_STR` can still be used as an explicit override for
-non-standard deployments.
-
-`HAYSTACK_PGVECTOR_LANGUAGE` is a PostgreSQL full-text search config used only by keyword
-retrieval and keyword indexes. It does not affect vector retrieval or embeddings. The default is
-`simple` because shops can contain documents in multiple languages.
-
-Use explicit `document_id` for updates. The indexing endpoint deletes old chunks for the same
-`shop_id + document_id` before writing the new version.
+PostgreSQL DSN is assembled from `HAYSTACK_POSTGRES_*`; `PG_CONN_STR` is still supported as an
+override. `HAYSTACK_PGVECTOR_LANGUAGE` affects only keyword full-text search. Use explicit
+`document_id` for updates: indexing deletes old chunks for the same document before writing the
+new version.
 
 ## LightRAG Stack
 
