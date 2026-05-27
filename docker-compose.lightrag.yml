@@ -40,7 +40,6 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-pg}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pg}
       POSTGRES_DATABASE: ${POSTGRES_DATABASE:-pg}
-      POSTGRES_WORKSPACE: ${LIGHTRAG_DEFAULT_WORKSPACE:-default}
       WORKING_DIR: /app/data/rag_storage
       INPUT_DIR: /app/data/inputs
       PROMPT_DIR: /app/data/prompts
