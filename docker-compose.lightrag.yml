@@ -4,9 +4,9 @@ services:
     image: pgvector/pgvector:0.8.1-pg18-trixie
     restart: unless-stopped
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-sa}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sa}
-      POSTGRES_DB: ${POSTGRES_DATABASE:-sa}
+      POSTGRES_USER: ${POSTGRES_USER:-pg}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pg}
+      POSTGRES_DB: ${POSTGRES_DATABASE:-pg}
     ports:
       - "${POSTGRES_BIND_HOST:-127.0.0.1}:${POSTGRES_PORT:-5432}:5432"
     volumes:
@@ -18,7 +18,7 @@ services:
       test:
         [
           "CMD-SHELL",
-          "pg_isready -U ${POSTGRES_USER:-sa} -d ${POSTGRES_DATABASE:-sa}",
+          "pg_isready -U ${POSTGRES_USER:-pg} -d ${POSTGRES_DATABASE:-pg}",
         ]
       interval: 10s
       timeout: 5s
@@ -37,9 +37,9 @@ services:
       WORKSPACE: ${LIGHTRAG_DEFAULT_WORKSPACE:-default}
       POSTGRES_HOST: pgvector
       POSTGRES_PORT: 5432
-      POSTGRES_USER: ${POSTGRES_USER:-sa}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sa}
-      POSTGRES_DATABASE: ${POSTGRES_DATABASE:-sa}
+      POSTGRES_USER: ${POSTGRES_USER:-pg}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pg}
+      POSTGRES_DATABASE: ${POSTGRES_DATABASE:-pg}
       POSTGRES_WORKSPACE: ${LIGHTRAG_DEFAULT_WORKSPACE:-default}
       WORKING_DIR: /app/data/rag_storage
       INPUT_DIR: /app/data/inputs

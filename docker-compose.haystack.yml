@@ -4,9 +4,9 @@ services:
     image: pgvector/pgvector:0.8.1-pg18-trixie
     restart: unless-stopped
     environment:
-      POSTGRES_USER: ${HAYSTACK_POSTGRES_USER:-sa}
-      POSTGRES_PASSWORD: ${HAYSTACK_POSTGRES_PASSWORD:-sa}
-      POSTGRES_DB: ${HAYSTACK_POSTGRES_DATABASE:-sa}
+      POSTGRES_USER: ${HAYSTACK_POSTGRES_USER:-pg}
+      POSTGRES_PASSWORD: ${HAYSTACK_POSTGRES_PASSWORD:-pg}
+      POSTGRES_DB: ${HAYSTACK_POSTGRES_DATABASE:-pg}
     ports:
       - "${HAYSTACK_POSTGRES_BIND_HOST:-127.0.0.1}:${HAYSTACK_POSTGRES_PORT:-5433}:5432"
     volumes:
@@ -18,7 +18,7 @@ services:
       test:
         [
           "CMD-SHELL",
-          "pg_isready -U ${HAYSTACK_POSTGRES_USER:-sa} -d ${HAYSTACK_POSTGRES_DATABASE:-sa}",
+          "pg_isready -U ${HAYSTACK_POSTGRES_USER:-pg} -d ${HAYSTACK_POSTGRES_DATABASE:-pg}",
         ]
       interval: 10s
       timeout: 5s
