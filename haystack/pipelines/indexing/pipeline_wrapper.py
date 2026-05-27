@@ -13,6 +13,7 @@ from haystack.document_stores.types import DuplicatePolicy
 from service.document_store import create_document_store
 from service.embedders import create_document_embedder
 from service.filters import scoped_filter, validate_identifier
+from service.schemas import IndexingResponse
 from service.settings import HaystackSettings, get_settings
 
 from haystack import Document, Pipeline
@@ -189,16 +190,15 @@ class PipelineWrapper(BasePipelineWrapper):
         indexing_result = indexing_pipeline.run({"document_cleaner": {"documents": documents}})
         chunks_written = indexing_result["document_writer"]["documents_written"]
 
-        return {
-            "status": "indexed",
-            "shop_id": normalized_shop_id,
-            "document_ids": sorted(set(document_ids)),
-            "documents_received": len(documents),
-            "chunks_deleted": deleted_chunks,
-            "chunks_written": chunks_written,
-            "table_name": document_store.table_name,
-            "table_exists": True,
-            "embedding_model": self.settings.embedding_model,
-            "embedding_dimension": self.settings.embedding_dimension,
-            "vector_type": self.settings.pg_vector_type,
-        }
+        return IndexingResponse(
+            shop_id=normalized_shop_id,
+            document_ids=sorted(set(document_ids)),
+            documents_received=len(documents),
+            chunks_deleted=deleted_chunks,
+            chunks_written=chunks_written,
+            table_name=document_store.table_name,
+            table_exists=True,
+            embedding_model=self.settings.embedding_model,
+            embedding_dimension=self.settings.embedding_dimension,
+            vector_type=self.settings.pg_vector_type,
+        ).to_payload()

@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from typing import Any
 
 from haystack.components.embedders import OpenAIDocumentEmbedder, OpenAITextEmbedder

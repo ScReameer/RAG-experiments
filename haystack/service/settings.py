@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import os
 from dataclasses import dataclass
 from functools import lru_cache
@@ -82,6 +80,7 @@ class HaystackSettings:
     split_length: int
     split_overlap: int
     default_top_k: int
+    default_context_window_size: int
 
 
 @lru_cache
@@ -130,4 +129,5 @@ def get_settings() -> HaystackSettings:
         split_length=_get_int("HAYSTACK_SPLIT_LENGTH", 250),
         split_overlap=_get_int("HAYSTACK_SPLIT_OVERLAP", 40),
         default_top_k=_get_int("HAYSTACK_DEFAULT_TOP_K", 10),
+        default_context_window_size=_get_int("HAYSTACK_CONTEXT_WINDOW_SIZE", 1),
     )
