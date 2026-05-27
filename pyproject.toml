@@ -11,6 +11,7 @@ dependencies = [
     "haystack-ai>=2.29.0,<3.0.0",
     "mdit-plain>=1.0.1,<2.0.0",
     "pgvector-haystack>=6.3.0,<7.0.0",
+    "pydantic>=2.13.0,<3.0.0",
     "psycopg[binary]>=3.3.0,<4.0.0",
     "pypdf>=6.0.0,<7.0.0",
     "python-dotenv>=1.2.1,<2.0.0",
@@ -31,7 +32,7 @@ dev = [
 ]
 
 [tool.pdm.scripts]
-serve = {shell = "HAYHOOKS_HOST=${HAYHOOKS_HOST:-0.0.0.0} HAYHOOKS_PORT=${HAYHOOKS_PORT:-1416} HAYHOOKS_PIPELINES_DIR=${HAYHOOKS_PIPELINES_DIR:-haystack/pipelines} HAYHOOKS_ADDITIONAL_PYTHON_PATH=${HAYHOOKS_ADDITIONAL_PYTHON_PATH:-haystack} hayhooks run"}
+serve = "hayhooks run --host 0.0.0.0 --port 1416 --pipelines-dir haystack/pipelines --additional-python-path haystack"
 "haystack.infra" = {shell = "docker compose --env-file .env.haystack -f docker-compose.haystack.yml up -d --wait haystack-pgvector"}
 "haystack.up" = {shell = "docker compose --env-file .env.haystack -f docker-compose.haystack.yml up -d --build --wait"}
 "lightrag.up" = {shell = "docker compose --env-file .env.lightrag -f docker-compose.lightrag.yml up -d --wait"}

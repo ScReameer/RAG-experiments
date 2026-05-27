@@ -5,7 +5,7 @@
 groups = ["default", "dev"]
 strategy = []
 lock_version = "4.5.0"
-content_hash = "sha256:f2864336825b74ad520b7f56b194bf6cf0137b6bdcd0a076445e082f1e180331"
+content_hash = "sha256:3efcea8e358fea1c1bc2fc3e03a96aa8a7ca9a9f6c940ad5276a4e1e861730a6"
 
 [[metadata.targets]]
 requires_python = "==3.14.*"
@@ -998,11 +998,11 @@ files = [
 
 [[package]]
 name = "pypdf"
-version = "6.12.1"
+version = "6.12.2"
 summary = ""
 files = [
-    {file = "pypdf-6.12.1-py3-none-any.whl", hash = "sha256:8fa2a2321cf16247ed848bd7c97f193a60c08670d04abed5b0138327e51c43b0"},
-    {file = "pypdf-6.12.1.tar.gz", hash = "sha256:3953a097b9f26d4e0ead5ff95943d9971377557662a91d8872186053cd71d30a"},
+    {file = "pypdf-6.12.2-py3-none-any.whl", hash = "sha256:67b2699357a1f3f4c945940ea80826349ee507c9e2577724a14b4941982c104d"},
+    {file = "pypdf-6.12.2.tar.gz", hash = "sha256:111669eb6680c04495ae0c113a1476e3bf93a95761d23c7406b591c80a6490b1"},
 ]
 
 [[package]]
@@ -1291,17 +1291,17 @@ files = [
 
 [[package]]
 name = "typer"
-version = "0.25.1"
+version = "0.26.1"
 summary = ""
 dependencies = [
     "annotated-doc",
-    "click",
+    "colorama; sys_platform == \"win32\"",
     "rich",
     "shellingham",
 ]
 files = [
-    {file = "typer-0.25.1-py3-none-any.whl", hash = "sha256:75caa44ed46a03fb2dab8808753ffacdbfea88495e74c85a28c5eefcf5f39c89"},
-    {file = "typer-0.25.1.tar.gz", hash = "sha256:9616eb8853a09ffeabab1698952f33c6f29ffdbceb4eaeecf571880e8d7664cc"},
+    {file = "typer-0.26.1-py3-none-any.whl", hash = "sha256:933e4f0083521f3c57d6a5aedf3b073271b2f95a19761b171b494dd6fdb21ff6"},
+    {file = "typer-0.26.1.tar.gz", hash = "sha256:537d27ae686d82967f6383382a952cb32ba4768898541effccb69ca75bbd5d23"},
 ]
 
 [[package]]
